@@ -1,0 +1,58 @@
+# docker-compose.yml
+version: '3.7'
+services:
+  redis:
+    image: 'redis:latest'
+    command: ['redis-server', '--requirepass', 'redis']
+    networks:
+      - gitlab
+  gitlab-ce:
+    image: 'gitlab/gitlab-ce:latest'
+    restart: always
+    hostname: 'localhost'
+    container_name: gitlab-ce
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost'
+        gitlab_rails['db_adapter'] = 'postgresql'
+        gitlab_rails['db_encoding'] = 'unicode'
+        gitlab_rails['db_host'] = '10.0.0.208'
+        gitlab_rails['db_port'] = '5432'
+        gitlab_rails['db_database'] = 'gitlabhq_production'
+        gitlab_rails['db_username'] = 'gitlab'
+        gitlab_rails['db_password'] = '123456'
+
+        redis['enable'] = true
+        gitlab_rails['redis_host'] = 'redis'
+        gitlab_rails['redis_port'] = 6379
+        gitlab_rails['redis_password'] = 'redis'
+
+        redis_exporter['enable'] = true
+        redis_exporter['flags'] = {
+          'redis.addr' => 'redis://redis:6379',
+          'redis.password' => 'redis'
+        }
+    ports:
+      - '8080:80'
+      - '8443:443'
+    volumes:
+      - '$GITLAB_HOME/config:/etc/gitlab'
+      - '$GITLAB_HOME/logs:/var/log/gitlab'
+      - '$GITLAB_HOME/data:/var/opt/gitlab'
+    networks:
+      - gitlab
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine
+    container_name: gitlab-runner
+    restart: always
+    depends_on:
+      - gitlab-ce
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - '$GITLAB_HOME/gitlab-runner:/etc/gitlab-runner'
+    networks:
+      - gitlab
+
+networks:
+  gitlab:
+    name: gitlab-network
